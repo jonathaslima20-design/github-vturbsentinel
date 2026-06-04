@@ -100,7 +100,8 @@ Deno.serve(async (req: Request) => {
     // GET = test mode: sends a PageView event to validate connectivity
     if (isTest) {
       const eventTime = Math.floor(Date.now() / 1000);
-      const clientIp = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "";
+      const rawIp = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "";
+      const clientIp = rawIp.split(",")[0].trim();
       const clientUserAgent = req.headers.get("user-agent") || "";
 
       const testPayload: Record<string, any> = {
@@ -153,7 +154,8 @@ Deno.serve(async (req: Request) => {
     }
 
     const eventTime = Math.floor(Date.now() / 1000);
-    const clientIp = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "";
+    const rawIp = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "";
+    const clientIp = rawIp.split(",")[0].trim();
     const clientUserAgent = req.headers.get("user-agent") || "";
 
     const userDataPayload: Record<string, string> = {};
