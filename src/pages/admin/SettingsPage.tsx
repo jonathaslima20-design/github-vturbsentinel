@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Save, Code as Code2, ChartBar as BarChart3, Loader as Loader2, CircleCheck as CheckCircle2, CircleAlert as AlertCircle, Eye, EyeOff, ExternalLink, Server, Globe } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { Save, Code as Code2, ChartBar as BarChart3, Loader as Loader2, CircleCheck as CheckCircle2, CircleAlert as AlertCircle, Eye, EyeOff, ExternalLink, Server, Globe, FlaskConical } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -35,6 +35,8 @@ export default function SettingsPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [pixelIdError, setPixelIdError] = useState('');
+  const [capiTestResult, setCapiTestResult] = useState<any>(null);
+  const [capiTesting, setCapiTesting] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -55,6 +57,28 @@ export default function SettingsPage() {
       }
       setLoading(false);
     })();
+  }, []);
+
+  const handleTestCapi = useCallback(async () => {
+    setCapiTesting(true);
+    setCapiTestResult(null);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const res = await fetch(`${supabaseUrl}/functions/v1/meta-capi?test=1`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'apikey': supabaseAnonKey,
+        },
+      });
+      const json = await res.json();
+      setCapiTestResult(json);
+    } catch (e: any) {
+      setCapiTestResult({ ok: false, error: e.message });
+    } finally {
+      setCapiTesting(false);
+    }
   }, []);
 
   const handleSave = async () => {
@@ -239,6 +263,33 @@ export default function SettingsPage() {
                   <p className="text-xs text-muted-foreground">
                     Use a aba "Testar eventos" no Gerenciador de Eventos para validar antes de ativar em produção.
                   </p>
+                </div>
+
+                {/* CAPI Test Button */}
+                <div className="rounded-lg border border-dashed p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FlaskConical className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">Testar API de Conversões</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleTestCapi}
+                      disabled={capiTesting}
+                    >
+                      {capiTesting && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                      {capiTesting ? 'Testando...' : 'Enviar evento de teste'}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Envia um PageView de teste para a CAPI do Meta. Salve as configurações antes de testar.
+                  </p>
+                  {capiTestResult && (
+                    <pre className="mt-2 p-3 rounded-md bg-muted text-xs font-mono overflow-x-auto max-h-60 overflow-y-auto whitespace-pre-wrap">
+                      {JSON.stringify(capiTestResult, null, 2)}
+                    </pre>
+                  )}
                 </div>
 
                 <Separator className="my-2" />
