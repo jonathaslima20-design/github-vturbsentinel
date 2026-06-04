@@ -22,26 +22,42 @@ async function sendServerEvent(eventName: string, eventData?: Record<string, any
   try {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseAnonKey) return;
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.warn('[metaEvents] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY');
+      return;
+    }
 
-    await fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
+    const url = `${supabaseUrl}/functions/v1/meta-capi`;
+    const body = JSON.stringify({
+      eventName,
+      eventId,
+      eventData,
+      userData,
+      sourceUrl: window.location.href,
+      fbp: getCookie('_fbp'),
+      fbc: getCookie('_fbc'),
+    });
+
+    console.log('[metaEvents] Sending CAPI event:', eventName, eventId);
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${supabaseAnonKey}`,
         'Content-Type': 'application/json',
+        'apikey': supabaseAnonKey,
       },
-      body: JSON.stringify({
-        eventName,
-        eventId,
-        eventData,
-        userData,
-        sourceUrl: window.location.href,
-        fbp: getCookie('_fbp'),
-        fbc: getCookie('_fbc'),
-      }),
+      body,
     });
+
+    const result = await response.json();
+    console.log('[metaEvents] CAPI response:', result);
+
+    if (!result.ok) {
+      console.warn('[metaEvents] CAPI event not delivered:', result);
+    }
   } catch (e) {
-    console.warn('Meta CAPI event failed:', e);
+    console.error('[metaEvents] CAPI fetch error:', e);
   }
 }
 

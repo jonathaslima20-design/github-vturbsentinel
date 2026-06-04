@@ -17,38 +17,129 @@ async function sha256(value: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+function getSupabaseClient() {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  return createClient(supabaseUrl, supabaseServiceKey);
+}
+
+async function loadConfig() {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("landing_tracking_config")
+    .select("meta_pixel_id, meta_capi_token, meta_capi_enabled, meta_test_event_code")
+    .maybeSingle();
+  return { config: data, error };
+}
+
+async function sendToMeta(
+  pixelId: string,
+  capiToken: string,
+  payload: Record<string, any>
+): Promise<{ status: number; body: any }> {
+  const url = `${META_CAPI_URL}/${pixelId}/events?access_token=${capiToken}`;
+  console.log("[meta-capi] Sending to Meta:", JSON.stringify(payload));
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = await response.json();
+  console.log("[meta-capi] Meta response:", response.status, JSON.stringify(body));
+  return { status: response.status, body };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const url = new URL(req.url);
+    const isTest = req.method === "GET" || url.searchParams.has("test");
 
-    // Load tracking config
-    const { data: config, error: configError } = await supabase
-      .from("landing_tracking_config")
-      .select("meta_pixel_id, meta_capi_token, meta_capi_enabled, meta_test_event_code")
-      .maybeSingle();
+    console.log("[meta-capi] Request received:", req.method, url.pathname, url.search);
+
+    const { config, error: configError } = await loadConfig();
 
     if (configError || !config) {
+      console.error("[meta-capi] Config load error:", configError);
       return new Response(
-        JSON.stringify({ ok: false, message: "Config not found" }),
+        JSON.stringify({ ok: false, message: "Config not found", error: configError?.message }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    if (!config.meta_capi_enabled || !config.meta_pixel_id || !config.meta_capi_token) {
+    const pixelId = config.meta_pixel_id?.trim();
+    const capiToken = config.meta_capi_token?.trim();
+    const capiEnabled = config.meta_capi_enabled;
+    const testEventCode = config.meta_test_event_code?.trim();
+
+    console.log("[meta-capi] Config loaded:", {
+      pixelId: pixelId ? `${pixelId.substring(0, 4)}...` : "(empty)",
+      capiToken: capiToken ? `${capiToken.substring(0, 8)}...` : "(empty)",
+      capiEnabled,
+      testEventCode: testEventCode || "(none)",
+    });
+
+    if (!capiEnabled || !pixelId || !capiToken) {
       return new Response(
-        JSON.stringify({ ok: false, message: "CAPI not configured or disabled" }),
+        JSON.stringify({
+          ok: false,
+          message: "CAPI not configured or disabled",
+          debug: {
+            capiEnabled,
+            hasPixelId: !!pixelId,
+            hasToken: !!capiToken,
+          },
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    // GET = test mode: sends a PageView event to validate connectivity
+    if (isTest) {
+      const eventTime = Math.floor(Date.now() / 1000);
+      const testPayload: Record<string, any> = {
+        data: [
+          {
+            event_name: "PageView",
+            event_time: eventTime,
+            action_source: "website",
+            event_source_url: "https://vitrineturbo.com",
+            user_data: {
+              client_user_agent: req.headers.get("user-agent") || "test-agent",
+            },
+          },
+        ],
+      };
+      if (testEventCode) {
+        testPayload.test_event_code = testEventCode;
+      }
+
+      const { status, body } = await sendToMeta(pixelId, capiToken, testPayload);
+
+      return new Response(
+        JSON.stringify({
+          ok: status >= 200 && status < 300,
+          test: true,
+          meta_status: status,
+          meta_response: body,
+          payload_sent: testPayload,
+          config_used: {
+            pixel_id: pixelId,
+            test_event_code: testEventCode || null,
+          },
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // POST = real event from frontend
     const body = await req.json();
     const { eventName, eventId, eventData = {}, userData = {}, sourceUrl, fbp, fbc } = body;
+
+    console.log("[meta-capi] Event request:", { eventName, eventId, sourceUrl });
 
     if (!eventName) {
       return new Response(
@@ -100,29 +191,24 @@ Deno.serve(async (req: Request) => {
       data: [eventPayload],
     };
 
-    if (config.meta_test_event_code) {
-      payload.test_event_code = config.meta_test_event_code;
+    if (testEventCode) {
+      payload.test_event_code = testEventCode;
     }
 
-    const response = await fetch(
-      `${META_CAPI_URL}/${config.meta_pixel_id}/events?access_token=${config.meta_capi_token}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }
-    );
-
-    const result = await response.json();
+    const { status, body: metaResult } = await sendToMeta(pixelId, capiToken, payload);
 
     return new Response(
-      JSON.stringify({ ok: true, result }),
+      JSON.stringify({
+        ok: status >= 200 && status < 300,
+        meta_status: status,
+        meta_response: metaResult,
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Meta CAPI error:", error);
+    console.error("[meta-capi] Unhandled error:", error);
     return new Response(
-      JSON.stringify({ ok: false, error: String(error) }),
+      JSON.stringify({ ok: false, error: String(error), stack: error?.stack }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
