@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { Loader, CircleAlert as AlertCircle, MessageCircle } from 'lucide-react';
 import { useSubscriptionModal } from '@/contexts/SubscriptionModalContext';
+import { trackLead } from '@/lib/metaEvents';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -131,6 +132,7 @@ export default function RegisterPage() {
 
       // Clear referral code from localStorage after successful registration
       localStorage.removeItem('vitrineturbo_ref_code');
+      trackLead(data.email);
       toast.success('Cadastro realizado com sucesso!');
       openModal(false);
       navigate('/dashboard');

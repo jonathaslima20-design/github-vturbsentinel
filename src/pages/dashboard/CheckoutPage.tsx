@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { trackPurchase } from '@/lib/metaEvents';
 import {
   createPixPayment,
   createCardPayment,
@@ -595,8 +596,11 @@ export default function CheckoutPage() {
 
   const handleSuccess = useCallback(async () => {
     setPaymentComplete(true);
+    if (plan) {
+      trackPurchase(plan.name, plan.price, user?.email);
+    }
     await refreshUser();
-  }, [refreshUser]);
+  }, [refreshUser, plan, user?.email]);
 
   if (planLoading || !plan) {
     return (

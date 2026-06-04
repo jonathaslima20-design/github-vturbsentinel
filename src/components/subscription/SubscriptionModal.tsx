@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { trackViewPricing, trackInitiateCheckout } from '@/lib/metaEvents';
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,7 @@ export default function SubscriptionModal({ open, onOpenChange, isForced = false
   useEffect(() => {
     if (open) {
       fetchPlans();
+      trackViewPricing();
     }
   }, [open]);
 
@@ -351,6 +353,7 @@ export default function SubscriptionModal({ open, onOpenChange, isForced = false
                             : 'bg-zinc-900 text-white hover:bg-zinc-800'
                         }`}
                         onClick={() => {
+                          trackInitiateCheckout(plan.name, plan.price);
                           onOpenChange(false);
                           navigate(`/dashboard/checkout?plan=${plan.id}&cycle=${plan.duration}`);
                         }}

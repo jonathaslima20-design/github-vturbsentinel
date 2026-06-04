@@ -1,36 +1,65 @@
 import { useEffect, useState } from 'react';
-import { Save, Code as Code2, ChartBar as BarChart3, Loader as Loader2, CircleCheck as CheckCircle2, CircleAlert as AlertCircle } from 'lucide-react';
+import { Save, Code as Code2, ChartBar as BarChart3, Loader as Loader2, CircleCheck as CheckCircle2, CircleAlert as AlertCircle, Eye, EyeOff, ExternalLink, Server } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/lib/supabase';
 
 interface TrackingConfig {
   meta_pixel_id: string;
   google_tag_id: string;
+  meta_capi_token: string;
+  meta_capi_enabled: boolean;
+  meta_pixel_enabled: boolean;
+  meta_test_event_code: string;
 }
 
 type SaveState = 'idle' | 'saving' | 'success' | 'error';
 
 export default function SettingsPage() {
-  const [config, setConfig] = useState<TrackingConfig>({ meta_pixel_id: '', google_tag_id: '' });
+  const [config, setConfig] = useState<TrackingConfig>({
+    meta_pixel_id: '',
+    google_tag_id: '',
+    meta_capi_token: '',
+    meta_capi_enabled: false,
+    meta_pixel_enabled: false,
+    meta_test_event_code: '',
+  });
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
+  const [showToken, setShowToken] = useState(false);
+  const [pixelIdError, setPixelIdError] = useState('');
 
   useEffect(() => {
     (async () => {
       const { data } = await supabase
         .from('landing_tracking_config')
-        .select('meta_pixel_id, google_tag_id')
+        .select('meta_pixel_id, google_tag_id, meta_capi_token, meta_capi_enabled, meta_pixel_enabled, meta_test_event_code')
         .maybeSingle();
-      if (data) setConfig({ meta_pixel_id: data.meta_pixel_id, google_tag_id: data.google_tag_id });
+      if (data) {
+        setConfig({
+          meta_pixel_id: data.meta_pixel_id || '',
+          google_tag_id: data.google_tag_id || '',
+          meta_capi_token: data.meta_capi_token || '',
+          meta_capi_enabled: data.meta_capi_enabled || false,
+          meta_pixel_enabled: data.meta_pixel_enabled || false,
+          meta_test_event_code: data.meta_test_event_code || '',
+        });
+      }
       setLoading(false);
     })();
   }, []);
 
   const handleSave = async () => {
+    if (config.meta_pixel_id && !/^\d+$/.test(config.meta_pixel_id)) {
+      setPixelIdError('O Pixel ID deve conter apenas números');
+      return;
+    }
+    setPixelIdError('');
     setSaveState('saving');
     setErrorMsg('');
     const { error } = await supabase
@@ -75,26 +104,6 @@ export default function SettingsPage() {
             </div>
           ) : (
             <>
-              {/* Meta Pixel */}
-              <div className="space-y-2">
-                <Label htmlFor="meta-pixel" className="flex items-center gap-2 text-sm font-medium">
-                  <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-[#0866FF] text-white text-[10px] font-bold leading-none select-none">f</span>
-                  Meta Pixel ID
-                </Label>
-                <Input
-                  id="meta-pixel"
-                  placeholder="Ex: 1234567890123456"
-                  value={config.meta_pixel_id}
-                  onChange={(e) => setConfig((c) => ({ ...c, meta_pixel_id: e.target.value.trim() }))}
-                  className="font-mono text-sm"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Encontre seu Pixel ID em{' '}
-                  <span className="font-medium">Gerenciador de Anúncios &gt; Pixels</span>.
-                  Apenas o número, ex: <span className="font-mono">1234567890123456</span>
-                </p>
-              </div>
-
               {/* Google Tag */}
               <div className="space-y-2">
                 <Label htmlFor="google-tag" className="flex items-center gap-2 text-sm font-medium">
@@ -112,6 +121,122 @@ export default function SettingsPage() {
                   Aceita formato <span className="font-mono">GTM-XXXXXXX</span> (Google Tag Manager) ou{' '}
                   <span className="font-mono">G-XXXXXXXXXX</span> (Google Analytics 4).
                 </p>
+              </div>
+
+              <Separator />
+
+              {/* Meta Pixel Section */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-[#0866FF] text-white text-[10px] font-bold leading-none select-none">f</span>
+                  <span className="text-sm font-semibold">Meta Pixel & API de Conversões</span>
+                </div>
+
+                {/* Pixel ID */}
+                <div className="space-y-2">
+                  <Label htmlFor="meta-pixel" className="text-sm font-medium">
+                    Pixel ID do Meta
+                  </Label>
+                  <Input
+                    id="meta-pixel"
+                    placeholder="Ex: 1234567890123456"
+                    value={config.meta_pixel_id}
+                    onChange={(e) => {
+                      setConfig((c) => ({ ...c, meta_pixel_id: e.target.value.trim() }));
+                      setPixelIdError('');
+                    }}
+                    className="font-mono text-sm"
+                  />
+                  {pixelIdError && (
+                    <p className="text-xs text-destructive">{pixelIdError}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Encontre seu Pixel ID em{' '}
+                    <a
+                      href="https://business.facebook.com/events_manager"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-blue-600 hover:underline inline-flex items-center gap-0.5"
+                    >
+                      Gerenciador de Eventos <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </p>
+                </div>
+
+                {/* Pixel Enabled Toggle */}
+                <div className="flex items-center justify-between rounded-lg border p-3">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium">Ativar Meta Pixel (browser)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Injeta o script do pixel no frontend para rastreamento client-side
+                    </p>
+                  </div>
+                  <Switch
+                    checked={config.meta_pixel_enabled}
+                    onCheckedChange={(checked) => setConfig((c) => ({ ...c, meta_pixel_enabled: checked }))}
+                  />
+                </div>
+
+                <Separator className="my-2" />
+
+                {/* CAPI Token */}
+                <div className="space-y-2">
+                  <Label htmlFor="capi-token" className="flex items-center gap-2 text-sm font-medium">
+                    <Server className="h-3.5 w-3.5 text-muted-foreground" />
+                    Token de Acesso da API de Conversões
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="capi-token"
+                      type={showToken ? 'text' : 'password'}
+                      placeholder="Token gerado no Gerenciador de Eventos"
+                      value={config.meta_capi_token}
+                      onChange={(e) => setConfig((c) => ({ ...c, meta_capi_token: e.target.value.trim() }))}
+                      className="font-mono text-sm pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowToken(!showToken)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    O token nunca é exposto no frontend. Usado apenas no servidor para eventos server-side.
+                  </p>
+                </div>
+
+                {/* CAPI Enabled Toggle */}
+                <div className="flex items-center justify-between rounded-lg border p-3">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium">Ativar API de Conversões (servidor)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Envia eventos server-side para o Meta (não é bloqueado por ad blockers)
+                    </p>
+                  </div>
+                  <Switch
+                    checked={config.meta_capi_enabled}
+                    onCheckedChange={(checked) => setConfig((c) => ({ ...c, meta_capi_enabled: checked }))}
+                  />
+                </div>
+
+                {/* Test Event Code */}
+                <div className="space-y-2">
+                  <Label htmlFor="test-event-code" className="text-sm font-medium">
+                    Código de Teste de Eventos (opcional)
+                  </Label>
+                  <Input
+                    id="test-event-code"
+                    placeholder="Ex: TEST12345"
+                    value={config.meta_test_event_code}
+                    onChange={(e) => setConfig((c) => ({ ...c, meta_test_event_code: e.target.value.trim() }))}
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Use a aba "Testar eventos" no Gerenciador de Eventos para validar antes de ativar em produção.
+                  </p>
+                </div>
               </div>
 
               {saveState === 'error' && (

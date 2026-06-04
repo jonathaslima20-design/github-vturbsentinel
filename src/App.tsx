@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import SessionManager from '@/components/auth/SessionManager';
+import MetaPixel from '@/components/MetaPixel';
 import FloatingWhatsAppButton from '@/components/FloatingWhatsAppButton';
 import CookieConsentBanner from '@/components/CookieConsentBanner';
 import { OfferDisplayManager } from '@/components/offers/OfferDisplayManager';
@@ -181,6 +182,7 @@ function AppContent() {
       </div>
     }>
       <SessionManager />
+      <MetaPixel />
       <Routes>
         {/* Custom Domain Routes - when accessed via user's own domain */}
         {isCustomDomain && customDomainSlug && (
