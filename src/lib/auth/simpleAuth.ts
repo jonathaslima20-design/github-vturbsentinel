@@ -519,6 +519,26 @@ export async function registerUser(
       .from('user_storefront_settings')
       .upsert({ user_id: userProfile.id, settings: { enableInventory: true } }, { onConflict: 'user_id' });
 
+    // Record first access at registration time
+    supabase
+      .rpc('update_user_last_login', { p_email: normalizedEmail })
+      .then(({ error }) => {
+        if (error) console.warn('⚠️ last_login_at update on register failed:', error.message);
+      });
+
+    supabase
+      .from('user_activity_logs')
+      .insert({
+        user_id: userProfile.id,
+        action: 'auth.register',
+        description: 'Criou conta no sistema',
+        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+      })
+      .then(() => {});
+
+    userProfile.last_login_at = new Date().toISOString();
+    userProfile.login_count = 1;
+
     // Store credentials and user data (with normalized email)
     storeCredentials(normalizedEmail, password);
     storeUser(userProfile);
@@ -532,6 +552,8 @@ export async function registerUser(
   }
 }
 
+const LAST_LOGIN_DEBOUNCE_MS = 60 * 60 * 1000; // 1 hour
+
 // Auto-login using stored credentials
 export async function autoLogin(): Promise<{
   user: StoredUser | null;
@@ -543,6 +565,20 @@ export async function autoLogin(): Promise<{
       const user = getStoredUser();
       if (user) {
         console.log('✅ User already authenticated from localStorage');
+
+        // Debounced last_login_at update so admin panel reflects recent activity
+        const lastRecorded = user.last_login_at ? new Date(user.last_login_at).getTime() : 0;
+        if (Date.now() - lastRecorded > LAST_LOGIN_DEBOUNCE_MS && user.email) {
+          supabase
+            .rpc('update_user_last_login', { p_email: user.email })
+            .then(({ error }) => {
+              if (error) console.warn('⚠️ last_login_at debounce update failed:', error.message);
+            });
+          user.last_login_at = new Date().toISOString();
+          user.login_count = (user.login_count || 0) + 1;
+          storeUser(user);
+        }
+
         return { user, error: null };
       }
     }
