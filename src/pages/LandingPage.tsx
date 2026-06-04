@@ -13,14 +13,23 @@ function useLandingTracking() {
     let gtmScript: HTMLScriptElement | null = null;
     let gtmNoScript: HTMLElement | null = null;
     let gtmDataLayer: HTMLScriptElement | null = null;
+    let domainVerificationMeta: HTMLMetaElement | null = null;
 
     const loadTracking = async () => {
       const { data } = await supabase
         .from('landing_tracking_config')
-        .select('meta_pixel_id, google_tag_id')
+        .select('meta_pixel_id, google_tag_id, meta_domain_verification')
         .maybeSingle();
 
       if (!data) return;
+
+      const domainVerification = data.meta_domain_verification?.trim();
+      if (domainVerification) {
+        domainVerificationMeta = document.createElement('meta');
+        domainVerificationMeta.name = 'facebook-domain-verification';
+        domainVerificationMeta.content = domainVerification;
+        document.head.appendChild(domainVerificationMeta);
+      }
 
       const pixelId = data.meta_pixel_id?.trim();
       if (pixelId) {
@@ -82,7 +91,7 @@ function useLandingTracking() {
 
     return () => {
       window.clearTimeout(timer);
-      [metaScript, metaNoScript, gtmScript, gtmNoScript, gtmDataLayer].forEach((el) => el?.remove());
+      [metaScript, metaNoScript, gtmScript, gtmNoScript, gtmDataLayer, domainVerificationMeta].forEach((el) => el?.remove());
     };
   }, []);
 }

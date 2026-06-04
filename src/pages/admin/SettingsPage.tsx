@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Save, Code as Code2, ChartBar as BarChart3, Loader as Loader2, CircleCheck as CheckCircle2, CircleAlert as AlertCircle, Eye, EyeOff, ExternalLink, Server } from 'lucide-react';
+import { Save, Code as Code2, ChartBar as BarChart3, Loader as Loader2, CircleCheck as CheckCircle2, CircleAlert as AlertCircle, Eye, EyeOff, ExternalLink, Server, Globe } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,6 +15,7 @@ interface TrackingConfig {
   meta_capi_enabled: boolean;
   meta_pixel_enabled: boolean;
   meta_test_event_code: string;
+  meta_domain_verification: string;
 }
 
 type SaveState = 'idle' | 'saving' | 'success' | 'error';
@@ -27,6 +28,7 @@ export default function SettingsPage() {
     meta_capi_enabled: false,
     meta_pixel_enabled: false,
     meta_test_event_code: '',
+    meta_domain_verification: '',
   });
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [loading, setLoading] = useState(true);
@@ -38,7 +40,7 @@ export default function SettingsPage() {
     (async () => {
       const { data } = await supabase
         .from('landing_tracking_config')
-        .select('meta_pixel_id, google_tag_id, meta_capi_token, meta_capi_enabled, meta_pixel_enabled, meta_test_event_code')
+        .select('meta_pixel_id, google_tag_id, meta_capi_token, meta_capi_enabled, meta_pixel_enabled, meta_test_event_code, meta_domain_verification')
         .maybeSingle();
       if (data) {
         setConfig({
@@ -48,6 +50,7 @@ export default function SettingsPage() {
           meta_capi_enabled: data.meta_capi_enabled || false,
           meta_pixel_enabled: data.meta_pixel_enabled || false,
           meta_test_event_code: data.meta_test_event_code || '',
+          meta_domain_verification: data.meta_domain_verification || '',
         });
       }
       setLoading(false);
@@ -235,6 +238,38 @@ export default function SettingsPage() {
                   />
                   <p className="text-xs text-muted-foreground">
                     Use a aba "Testar eventos" no Gerenciador de Eventos para validar antes de ativar em produção.
+                  </p>
+                </div>
+
+                <Separator className="my-2" />
+
+                {/* Domain Verification */}
+                <div className="space-y-2">
+                  <Label htmlFor="domain-verification" className="flex items-center gap-2 text-sm font-medium">
+                    <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                    Meta Tag de Verificação de Domínio
+                  </Label>
+                  <Input
+                    id="domain-verification"
+                    placeholder="Ex: abcdef1234567890abcdef1234567890"
+                    value={config.meta_domain_verification}
+                    onChange={(e) => setConfig((c) => ({ ...c, meta_domain_verification: e.target.value.trim() }))}
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Apenas o valor (content) da tag. Será injetado como{' '}
+                    <code className="bg-muted px-1 py-0.5 rounded text-[10px]">
+                      {'<meta name="facebook-domain-verification" content="..." />'}
+                    </code>{' '}
+                    no head da landing page.{' '}
+                    <a
+                      href="https://business.facebook.com/settings/owned-domains"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-blue-600 hover:underline inline-flex items-center gap-0.5"
+                    >
+                      Verificar domínio <ExternalLink className="h-3 w-3" />
+                    </a>
                   </p>
                 </div>
               </div>
