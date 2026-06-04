@@ -100,6 +100,9 @@ Deno.serve(async (req: Request) => {
     // GET = test mode: sends a PageView event to validate connectivity
     if (isTest) {
       const eventTime = Math.floor(Date.now() / 1000);
+      const clientIp = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "";
+      const clientUserAgent = req.headers.get("user-agent") || "";
+
       const testPayload: Record<string, any> = {
         data: [
           {
@@ -108,7 +111,8 @@ Deno.serve(async (req: Request) => {
             action_source: "website",
             event_source_url: "https://vitrineturbo.com",
             user_data: {
-              client_user_agent: req.headers.get("user-agent") || "test-agent",
+              ...(clientIp && { client_ip_address: clientIp }),
+              ...(clientUserAgent && { client_user_agent: clientUserAgent }),
             },
           },
         ],
